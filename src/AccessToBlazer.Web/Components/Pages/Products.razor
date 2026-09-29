@@ -13,6 +13,10 @@
 {
     <div class="alert alert-success py-2">@savedMessage</div>
 }
+else if (errorMessage is not null)
+{
+    <div class="alert alert-danger py-2">@errorMessage</div>
+}
 
 <div class="row">
     <div class="col-md-7">
@@ -83,6 +87,7 @@
     private List<Product> products = new();
     private Product? editing;
     private string? savedMessage;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -95,12 +100,14 @@
     private void AddNew()
     {
         savedMessage = null;
+        errorMessage = null;
         editing = new Product();
     }
 
     private void Edit(Product product)
     {
         savedMessage = null;
+        errorMessage = null;
         editing = new Product
         {
             ProductId = product.ProductId,
@@ -131,13 +138,28 @@
 
         await db.SaveChangesAsync();
         savedMessage = $"Saved \"{editing.ProductName}\".";
+        errorMessage = null;
         editing = null;
         await LoadAsync();
     }
 
     private async Task Delete(Product product)
     {
+        savedMessage = null;
+        errorMessage = null;
+
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Access enforces referential integrity too, but surfaces it as an
+        // unhandled record-not-deletable error. Here we check first so the
+        // user gets a readable message instead of a DbUpdateException.
+        var orderCount = await db.Orders.CountAsync(o => o.ProductId == product.ProductId);
+        if (orderCount > 0)
+        {
+            errorMessage = $"Cannot delete \"{product.ProductName}\": {orderCount} order(s) still reference it. Delete those orders first.";
+            return;
+        }
+
         var entity = await db.Products.FindAsync(product.ProductId);
         if (entity is not null)
         {

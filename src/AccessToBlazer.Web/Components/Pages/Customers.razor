@@ -13,6 +13,10 @@
 {
     <div class="alert alert-success py-2">@savedMessage</div>
 }
+else if (errorMessage is not null)
+{
+    <div class="alert alert-danger py-2">@errorMessage</div>
+}
 
 <div class="row">
     <div class="col-md-7">
@@ -83,6 +87,7 @@
     private List<Customer> customers = new();
     private Customer? editing;
     private string? savedMessage;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -95,12 +100,14 @@
     private void AddNew()
     {
         savedMessage = null;
+        errorMessage = null;
         editing = new Customer();
     }
 
     private void Edit(Customer customer)
     {
         savedMessage = null;
+        errorMessage = null;
         editing = new Customer
         {
             CustomerId = customer.CustomerId,
@@ -131,13 +138,25 @@
 
         await db.SaveChangesAsync();
         savedMessage = $"Saved \"{editing.CustomerName}\".";
+        errorMessage = null;
         editing = null;
         await LoadAsync();
     }
 
     private async Task Delete(Customer customer)
     {
+        savedMessage = null;
+        errorMessage = null;
+
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        var orderCount = await db.Orders.CountAsync(o => o.CustomerId == customer.CustomerId);
+        if (orderCount > 0)
+        {
+            errorMessage = $"Cannot delete \"{customer.CustomerName}\": {orderCount} order(s) still reference it. Delete those orders first.";
+            return;
+        }
+
         var entity = await db.Customers.FindAsync(customer.CustomerId);
         if (entity is not null)
         {
