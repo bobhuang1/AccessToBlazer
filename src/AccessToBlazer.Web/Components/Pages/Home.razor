@@ -1,0 +1,59 @@
+﻿@page "/"
+
+<PageTitle>AccessToBlazer</PageTitle>
+
+<h1>Access to Blazor sample</h1>
+
+<p>
+    This is a small, self-contained demonstration of porting a Microsoft Access
+    database to an <strong>ASP.NET Core Blazor Server</strong> application.
+</p>
+
+<div class="row mt-4">
+    <div class="col-lg-7">
+        <h2>What was ported</h2>
+        <p>
+            The original Access file (<code>docs/AccessToBlazerSample.accdb</code>) contains
+            three tables and three bound forms, with <em>no authentication</em>:
+        </p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Access form</th>
+                    <th>Access table</th>
+                    <th>Blazor page</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Products</td>
+                    <td>Products</td>
+                    <td><a href="products">/products</a></td>
+                </tr>
+                <tr>
+                    <td>Customers</td>
+                    <td>Customers</td>
+                    <td><a href="customers">/customers</a></td>
+                </tr>
+                <tr>
+                    <td>Orders (combo lookups)</td>
+                    <td>Orders</td>
+                    <td><a href="orders">/orders</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-lg-5">
+        <h2>How it maps</h2>
+        <ul>
+            <li>Access <em>table</em> &rarr; EF Core entity + SQL Server table</li>
+            <li>Access <em>form</em> &rarr; Razor component (Blazor Server page)</li>
+            <li>Access <em>combo box</em> &rarr; <code>&lt;select&gt;</code> bound to a lookup list</li>
+            <li>Access &ldquo;create / edit / browse&rdquo; &rarr; inline editor with <code>EditForm</code></li>
+        </ul>
+        <p class="text-muted">
+            The database is created and seeded automatically on first run against
+            SQL Server LocalDB.
+        </p>
+    </div>
+</div>

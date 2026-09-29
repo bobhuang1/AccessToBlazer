@@ -1,0 +1,156 @@
+@page "/products"
+@rendermode InteractiveServer
+@using AccessToBlazer.Web.Data
+@using AccessToBlazer.Web.Models
+@inject IDbContextFactory<SampleDbContext> DbFactory
+
+<PageTitle>Products</PageTitle>
+
+<h1>Products</h1>
+<p class="text-muted">Ported from the Access <strong>Products</strong> form.</p>
+
+@if (savedMessage is not null)
+{
+    <div class="alert alert-success py-2">@savedMessage</div>
+}
+
+<div class="row">
+    <div class="col-md-7">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+                <tr>
+                    <th style="width:4rem">ID</th>
+                    <th>Name</th>
+                    <th class="text-end">Unit price</th>
+                    <th class="text-end">In stock</th>
+                    <th style="width:9rem"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in products)
+                {
+                    <tr class="@(editing is not null && editing.ProductId == product.ProductId ? "table-primary" : null)">
+                        <td>@product.ProductId</td>
+                        <td>@product.ProductName</td>
+                        <td class="text-end">@product.UnitPrice.ToString("C")</td>
+                        <td class="text-end">@product.UnitsInStock</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(product)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(product)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button class="btn btn-success" @onclick="AddNew">Add product</button>
+    </div>
+
+    <div class="col-md-5">
+        @if (editing is null)
+        {
+            <div class="alert alert-secondary">Select <em>Edit</em> or <em>Add product</em> to change a record.</div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-header">@(editing.ProductId == 0 ? "New product" : $"Product #{editing.ProductId}")</div>
+                <div class="card-body">
+                    <EditForm Model="editing" OnValidSubmit="Save">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <InputText class="form-control" @bind-Value="editing.ProductName" />
+                            <ValidationMessage For="() => editing.ProductName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Unit price</label>
+                            <InputNumber class="form-control" @bind-Value="editing.UnitPrice" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Units in stock</label>
+                            <InputNumber class="form-control" @bind-Value="editing.UnitsInStock" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+                    </EditForm>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Product> products = new();
+    private Product? editing;
+    private string? savedMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        products = await db.Products.OrderBy(p => p.ProductName).ToListAsync();
+    }
+
+    private void AddNew()
+    {
+        savedMessage = null;
+        editing = new Product();
+    }
+
+    private void Edit(Product product)
+    {
+        savedMessage = null;
+        editing = new Product
+        {
+            ProductId = product.ProductId,
+            ProductName = product.ProductName,
+            UnitPrice = product.UnitPrice,
+            UnitsInStock = product.UnitsInStock
+        };
+    }
+
+    private void Cancel() => editing = null;
+
+    private async Task Save()
+    {
+        if (editing is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (editing.ProductId == 0)
+        {
+            db.Products.Add(editing);
+        }
+        else
+        {
+            db.Products.Update(editing);
+        }
+
+        await db.SaveChangesAsync();
+        savedMessage = $"Saved \"{editing.ProductName}\".";
+        editing = null;
+        await LoadAsync();
+    }
+
+    private async Task Delete(Product product)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Products.FindAsync(product.ProductId);
+        if (entity is not null)
+        {
+            db.Products.Remove(entity);
+            await db.SaveChangesAsync();
+        }
+
+        if (editing?.ProductId == product.ProductId)
+        {
+            editing = null;
+        }
+
+        savedMessage = $"Deleted \"{product.ProductName}\".";
+        await LoadAsync();
+    }
+}

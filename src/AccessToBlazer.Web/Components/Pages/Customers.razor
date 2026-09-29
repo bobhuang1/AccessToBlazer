@@ -1,0 +1,156 @@
+@page "/customers"
+@rendermode InteractiveServer
+@using AccessToBlazer.Web.Data
+@using AccessToBlazer.Web.Models
+@inject IDbContextFactory<SampleDbContext> DbFactory
+
+<PageTitle>Customers</PageTitle>
+
+<h1>Customers</h1>
+<p class="text-muted">Ported from the Access <strong>Customers</strong> form.</p>
+
+@if (savedMessage is not null)
+{
+    <div class="alert alert-success py-2">@savedMessage</div>
+}
+
+<div class="row">
+    <div class="col-md-7">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+                <tr>
+                    <th style="width:4rem">ID</th>
+                    <th>Name</th>
+                    <th>City</th>
+                    <th>Phone</th>
+                    <th style="width:9rem"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var customer in customers)
+                {
+                    <tr class="@(editing is not null && editing.CustomerId == customer.CustomerId ? "table-primary" : null)">
+                        <td>@customer.CustomerId</td>
+                        <td>@customer.CustomerName</td>
+                        <td>@customer.City</td>
+                        <td>@customer.Phone</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(customer)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(customer)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button class="btn btn-success" @onclick="AddNew">Add customer</button>
+    </div>
+
+    <div class="col-md-5">
+        @if (editing is null)
+        {
+            <div class="alert alert-secondary">Select <em>Edit</em> or <em>Add customer</em> to change a record.</div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-header">@(editing.CustomerId == 0 ? "New customer" : $"Customer #{editing.CustomerId}")</div>
+                <div class="card-body">
+                    <EditForm Model="editing" OnValidSubmit="Save">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <InputText class="form-control" @bind-Value="editing.CustomerName" />
+                            <ValidationMessage For="() => editing.CustomerName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">City</label>
+                            <InputText class="form-control" @bind-Value="editing.City" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Phone</label>
+                            <InputText class="form-control" @bind-Value="editing.Phone" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+                    </EditForm>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Customer> customers = new();
+    private Customer? editing;
+    private string? savedMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        customers = await db.Customers.OrderBy(c => c.CustomerName).ToListAsync();
+    }
+
+    private void AddNew()
+    {
+        savedMessage = null;
+        editing = new Customer();
+    }
+
+    private void Edit(Customer customer)
+    {
+        savedMessage = null;
+        editing = new Customer
+        {
+            CustomerId = customer.CustomerId,
+            CustomerName = customer.CustomerName,
+            City = customer.City,
+            Phone = customer.Phone
+        };
+    }
+
+    private void Cancel() => editing = null;
+
+    private async Task Save()
+    {
+        if (editing is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (editing.CustomerId == 0)
+        {
+            db.Customers.Add(editing);
+        }
+        else
+        {
+            db.Customers.Update(editing);
+        }
+
+        await db.SaveChangesAsync();
+        savedMessage = $"Saved \"{editing.CustomerName}\".";
+        editing = null;
+        await LoadAsync();
+    }
+
+    private async Task Delete(Customer customer)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Customers.FindAsync(customer.CustomerId);
+        if (entity is not null)
+        {
+            db.Customers.Remove(entity);
+            await db.SaveChangesAsync();
+        }
+
+        if (editing?.CustomerId == customer.CustomerId)
+        {
+            editing = null;
+        }
+
+        savedMessage = $"Deleted \"{customer.CustomerName}\".";
+        await LoadAsync();
+    }
+}

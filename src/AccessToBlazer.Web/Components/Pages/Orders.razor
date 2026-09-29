@@ -1,0 +1,188 @@
+@page "/orders"
+@rendermode InteractiveServer
+@using AccessToBlazer.Web.Data
+@using AccessToBlazer.Web.Models
+@inject IDbContextFactory<SampleDbContext> DbFactory
+
+<PageTitle>Orders</PageTitle>
+
+<h1>Orders</h1>
+<p class="text-muted">
+    Ported from the Access <strong>Orders</strong> form, where <em>CustomerID</em> and
+    <em>ProductID</em> were combo-box lookups.
+</p>
+
+@if (savedMessage is not null)
+{
+    <div class="alert alert-success py-2">@savedMessage</div>
+}
+
+<div class="row">
+    <div class="col-md-7">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+                <tr>
+                    <th style="width:4rem">ID</th>
+                    <th>Customer</th>
+                    <th>Product</th>
+                    <th class="text-end">Qty</th>
+                    <th>Date</th>
+                    <th style="width:9rem"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var order in orders)
+                {
+                    <tr class="@(editing is not null && editing.OrderId == order.OrderId ? "table-primary" : null)">
+                        <td>@order.OrderId</td>
+                        <td>@order.Customer?.CustomerName</td>
+                        <td>@order.Product?.ProductName</td>
+                        <td class="text-end">@order.Quantity</td>
+                        <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(order)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(order)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button class="btn btn-success" @onclick="AddNew">Add order</button>
+    </div>
+
+    <div class="col-md-5">
+        @if (editing is null)
+        {
+            <div class="alert alert-secondary">Select <em>Edit</em> or <em>Add order</em> to change a record.</div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-header">@(editing.OrderId == 0 ? "New order" : $"Order #{editing.OrderId}")</div>
+                <div class="card-body">
+                    <EditForm Model="editing" OnValidSubmit="Save">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Customer</label>
+                            <InputSelect class="form-select" @bind-Value="editing.CustomerId">
+                                <option value="0">-- select --</option>
+                                @foreach (var customer in customers)
+                                {
+                                    <option value="@customer.CustomerId">@customer.CustomerName</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => editing.CustomerId" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Product</label>
+                            <InputSelect class="form-select" @bind-Value="editing.ProductId">
+                                <option value="0">-- select --</option>
+                                @foreach (var product in products)
+                                {
+                                    <option value="@product.ProductId">@product.ProductName</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => editing.ProductId" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantity</label>
+                            <InputNumber class="form-control" @bind-Value="editing.Quantity" />
+                            <ValidationMessage For="() => editing.Quantity" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Order date</label>
+                            <InputDate class="form-control" @bind-Value="editing.OrderDate" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+                    </EditForm>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Order> orders = new();
+    private List<Customer> customers = new();
+    private List<Product> products = new();
+    private Order? editing;
+    private string? savedMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        orders = await db.Orders
+            .Include(o => o.Customer)
+            .Include(o => o.Product)
+            .OrderByDescending(o => o.OrderDate)
+            .ToListAsync();
+        customers = await db.Customers.OrderBy(c => c.CustomerName).ToListAsync();
+        products = await db.Products.OrderBy(p => p.ProductName).ToListAsync();
+    }
+
+    private void AddNew()
+    {
+        savedMessage = null;
+        editing = new Order { OrderDate = DateTime.Today };
+    }
+
+    private void Edit(Order order)
+    {
+        savedMessage = null;
+        editing = new Order
+        {
+            OrderId = order.OrderId,
+            CustomerId = order.CustomerId,
+            ProductId = order.ProductId,
+            Quantity = order.Quantity,
+            OrderDate = order.OrderDate
+        };
+    }
+
+    private void Cancel() => editing = null;
+
+    private async Task Save()
+    {
+        if (editing is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (editing.OrderId == 0)
+        {
+            db.Orders.Add(editing);
+        }
+        else
+        {
+            db.Orders.Update(editing);
+        }
+
+        await db.SaveChangesAsync();
+        savedMessage = "Saved order.";
+        editing = null;
+        await LoadAsync();
+    }
+
+    private async Task Delete(Order order)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Orders.FindAsync(order.OrderId);
+        if (entity is not null)
+        {
+            db.Orders.Remove(entity);
+            await db.SaveChangesAsync();
+        }
+
+        if (editing?.OrderId == order.OrderId)
+        {
+            editing = null;
+        }
+
+        savedMessage = "Deleted order.";
+        await LoadAsync();
+    }
+}

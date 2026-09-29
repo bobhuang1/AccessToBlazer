@@ -1,0 +1,28 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+
+# Local database files (never commit a live database)
+*.mdf
+*.ldf
+*.db
+*.db-shm
+*.db-wal
+
+# Access lock file created while a .accdb is open
+*.laccdb
+*.ldb
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.sln.docstates
+
+# Tooling
+TestResults/
+*.dotsettings
