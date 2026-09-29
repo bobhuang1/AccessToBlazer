@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore AccessToBlazer.slnx
+
+      - name: Build
+        run: dotnet build AccessToBlazer.slnx -c Release --no-restore
+
+  smoke:
+    name: Smoke test (LocalDB)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build src/AccessToBlazer.Web/AccessToBlazer.Web.csproj -c Release
+
+      # The app creates, migrates and seeds its own SQL Server LocalDB database
+      # on startup, so booting it and requesting each page is a real end-to-end
+      # check: it fails if the migration does not apply or the seed is missing.
+      - name: Start app and check every page
+        shell: pwsh
+        run: |
+          $url = 'http://localhost:5232'
+          $logDir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
+          $log = Join-Path $logDir 'app.log'
+          $err = "$log.err"
+
+          $startArgs = @{
+            FilePath               = 'dotnet'
+            ArgumentList           = @('run', '--no-build', '-c', 'Release', '--urls', $url)
+            WorkingDirectory       = 'src/AccessToBlazer.Web'
+            RedirectStandardOutput = $log
+            RedirectStandardError  = $err
+            PassThru               = $true
+          }
+          $p = Start-Process @startArgs
+
+          $ready = $false
+          foreach ($i in 1..60) {
+            Start-Sleep -Seconds 2
+            if ($p.HasExited) {
+              Get-Content $log -ErrorAction SilentlyContinue
+              Get-Content "$log.err" -ErrorAction SilentlyContinue
+              throw "The app exited before it started listening (exit code $($p.ExitCode))."
+            }
+            try {
+              if ((Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 5).StatusCode -eq 200) {
+                $ready = $true
+                break
+              }
+            } catch { }
+          }
+          if (-not $ready) {
+            Get-Content $log -ErrorAction SilentlyContinue
+            throw "The app did not start listening on $url within 120s."
+          }
+
+          $failed = $false
+          foreach ($path in '/', '/products', '/customers', '/orders') {
+            try {
+              $r = Invoke-WebRequest ($url + $path) -UseBasicParsing -TimeoutSec 30
+              Write-Host "$path -> $($r.StatusCode)"
+              if ($r.StatusCode -ne 200) { $failed = $true }
+            } catch {
+              Write-Host "$path -> FAILED: $_"
+              $failed = $true
+            }
+          }
+
+          # The seed must be present, or the migration silently did nothing.
+          $body = (Invoke-WebRequest ($url + '/products') -UseBasicParsing -TimeoutSec 30).Content
+          if ($body -notmatch 'Widget A') {
+            Write-Host 'Seed data missing: Widget A was not found on /products.'
+            $failed = $true
+          }
+
+          $p | Stop-Process -Force
+          Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 40
+
+          if ($failed) { throw 'Smoke test failed.' }

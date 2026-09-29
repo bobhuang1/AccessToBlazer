@@ -1,5 +1,7 @@
 # AccessToBlazer - converting a classic Access database to Blazor Server
 
+[![CI](https://github.com/bobhuang1/AccessToBlazer/actions/workflows/ci.yml/badge.svg)](https://github.com/bobhuang1/AccessToBlazer/actions/workflows/ci.yml)
+
 A complete, self-contained demonstration of porting an old **Microsoft Access
 (MDB/ACCDB) database** to an **ASP.NET Core Blazor Server** application on
 **.NET 10**, using **EF Core** against **SQL Server LocalDB**.
@@ -20,6 +22,22 @@ There is no proprietary code here. The Access file is generated from scratch by
 The domain is a small product catalogue with orders - deliberately generic. The
 accessor is `docs/conversion-notes.md`, which maps every Access object to its
 Blazor equivalent type by type.
+
+## Screenshots
+
+`/products` - the ported `Products` form, list plus inline editor:
+
+![Products page](docs/screenshots/products.png)
+
+`/orders` - the ported `Orders` form, with the editor open so the two converted
+combo-box lookups (`Customer` and `Product`) are visible as `<InputSelect>`
+dropdowns:
+
+![Orders page](docs/screenshots/orders.png)
+
+`/customers`:
+
+![Customers page](docs/screenshots/customers.png)
 
 ## The old Access application
 
@@ -212,6 +230,30 @@ sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "DROP DATABASE AccessToBlazerSample;" -C
 The connection string is `ConnectionStrings:SampleDb` in
 `src/AccessToBlazer.Web/appsettings.json`; point it at any SQL Server you like.
 
+## The schema as a SQL script
+
+`docs/schema.sql` is the database schema, generated from the EF Core migration
+rather than written by hand:
+
+```bash
+dotnet ef migrations script --project src/AccessToBlazor.Web \
+  --context SampleDbContext --output docs/schema.sql
+```
+
+It contains the three `CREATE TABLE` statements, the two foreign keys
+(`ON DELETE NO ACTION`, i.e. EF's `DeleteBehavior.Restrict`) and the seed rows
+via `SET IDENTITY_INSERT`, so the ids match the `.accdb` exactly. The app applies
+all of this for you on startup; the script is there for inspecting the schema or
+provisioning a database by hand:
+
+```powershell
+sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "CREATE DATABASE AccessToBlazerSample;" -C
+sqlcmd -S "(localdb)\MSSQLLocalDB" -d AccessToBlazerSample -i docs/schema.sql -C
+```
+
+It is a plain script, not an idempotent one - it will fail if run twice against
+the same database. Regenerate it rather than editing it.
+
 To see the "before" side, open `docs/AccessToBlazerSample.accdb` in desktop
 Access (no macros, no VBA, no login). To regenerate it from scratch, run
 `tools/New-SampleAccessDb.ps1` (requires desktop Access).
@@ -220,9 +262,12 @@ Access (no macros, no VBA, no login). To regenerate it from scratch, run
 
 ```
 AccessToBlazer/
+|-- .github/workflows/ci.yml         build + Windows LocalDB smoke test
 |-- docs/
 |   |-- AccessToBlazerSample.accdb   the original Access app (3 tables, 3 forms)
-|   `-- conversion-notes.md          object-by-object and type-by-type mapping
+|   |-- schema.sql                   the SQL Server schema + seed, generated from the migration
+|   |-- conversion-notes.md          object-by-object and type-by-type mapping
+|   `-- screenshots/                 pages of the ported app
 |-- src/AccessToBlazer.Web/
 |   |-- Data/SampleDbContext.cs      EF Core context, relationships, seed data
 |   |-- Models/                      Product, Customer, Order
@@ -231,6 +276,18 @@ AccessToBlazer/
 |-- tools/New-SampleAccessDb.ps1     regenerates the .accdb by automation
 `-- LICENSE                          MIT
 ```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+- **Build** (ubuntu) - restore and build the solution in Release, 0 warnings
+  expected.
+- **Smoke test** (windows) - runs the app against SQL Server LocalDB and
+  requests `/`, `/products`, `/customers` and `/orders`, then asserts the seed
+  data is present. Because the app creates and migrates its own database on
+  startup, this catches a broken migration or a missing seed, which a plain
+  build cannot.
 
 ## Scope and limitations
 
