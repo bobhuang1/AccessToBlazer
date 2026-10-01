@@ -274,7 +274,7 @@ AccessToBlazer/
 |   |-- Migrations/                  InitialCreate
 |   `-- Components/Pages/            Home, Products, Customers, Orders
 |-- tools/New-SampleAccessDb.ps1     regenerates the .accdb by automation
-`-- LICENSE                          MIT
+`-- LICENSE.md                       GPL-3.0
 ```
 
 ## Continuous integration
