@@ -1,24 +1,42 @@
 $ErrorActionPreference = 'Stop'
-$outDir = 'C:\GitHub\AccessToBlazer\docs'
+# docs/ next to this tools/ folder, wherever the repository is cloned.
+$outDir = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\docs'))
 $dbPath = Join-Path $outDir 'AccessToBlazerSample.accdb'
 $acForm = 2
 
+Add-Type -Namespace AccessToBlazer -Name Win32 -MemberDefinition @'
+[DllImport("user32.dll")]
+public static extern uint GetWindowThreadProcessId(System.IntPtr hWnd, out uint processId);
+'@
+
+# Starts Access and remembers the process ID of *this* instance, so the script only
+# ever stops the Access it started - never a database the user has open elsewhere.
+$script:accessPids = @{}
 function New-Access {
     $a = New-Object -ComObject Access.Application
     $a.Visible = $true
     Start-Sleep -Seconds 3
+    $accessPid = [uint32]0
+    [void][AccessToBlazer.Win32]::GetWindowThreadProcessId([System.IntPtr]$a.hWndAccessApp(), [ref]$accessPid)
+    $script:accessPids[$a] = $accessPid
     return $a
 }
 function Quit-Access($a) {
+    $accessPid = $script:accessPids[$a]
     try { $a.DoCmd.Quit(0) | Out-Null } catch {}
     Start-Sleep -Seconds 2
-    Get-Process -Name MSACCESS -ErrorAction SilentlyContinue | Stop-Process -Force
+    if ($accessPid) {
+        # Quit() can leave the instance hanging after a COM failure; stop only that one.
+        Get-Process -Id $accessPid -ErrorAction SilentlyContinue | Stop-Process -Force
+        $script:accessPids.Remove($a)
+    }
     Start-Sleep -Seconds 1
 }
 
-Get-Process -Name MSACCESS -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Seconds 2
-if (Test-Path $dbPath) { Remove-Item $dbPath -Force }
+if (Test-Path $dbPath) {
+    try { Remove-Item $dbPath -Force }
+    catch { throw "Cannot replace $dbPath. Close it in Access and run the script again." }
+}
 
 # ---------------- Phase 1: database, tables, seed ----------------
 $a = New-Access
