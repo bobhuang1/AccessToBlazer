@@ -25,6 +25,14 @@ Blazor equivalent type by type.
 
 ## Screenshots
 
+All four are captured from the app running locally. There is no hosted demo:
+this is Blazor **Server** against SQL Server LocalDB, so it needs a local host
+and a database engine rather than static files.
+
+`/` - the landing page, with the Access-to-Blazor mapping table:
+
+![Home page](docs/screenshots/home.png)
+
 `/products` - the ported `Products` form, list plus inline editor:
 
 ![Products page](docs/screenshots/products.png)
