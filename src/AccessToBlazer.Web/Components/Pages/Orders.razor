@@ -99,6 +99,10 @@ else if (errorMessage is not null)
                             <label class="form-label">Order date</label>
                             <InputDate class="form-control" @bind-Value="editing.OrderDate" />
                         </div>
+                        @foreach (var message in validationErrors)
+                        {
+                            <div class="text-danger small mb-2">@message</div>
+                        }
                         <button type="submit" class="btn btn-primary">Save</button>
                         <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
                     </EditForm>
@@ -128,6 +132,7 @@ else if (errorMessage is not null)
     private Order? editing;
     private string? savedMessage;
     private string? errorMessage;
+    private IReadOnlyList<string> validationErrors = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -164,6 +169,7 @@ else if (errorMessage is not null)
 
     private void AddNew()
     {
+        validationErrors = [];
         savedMessage = null;
         errorMessage = null;
         editing = new Order { OrderDate = DateTime.Today };
@@ -171,6 +177,7 @@ else if (errorMessage is not null)
 
     private void Edit(OrderRow order)
     {
+        validationErrors = [];
         savedMessage = null;
         errorMessage = null;
         editing = new Order
@@ -184,7 +191,11 @@ else if (errorMessage is not null)
         };
     }
 
-    private void Cancel() => editing = null;
+    private void Cancel()
+    {
+        editing = null;
+        validationErrors = [];
+    }
 
     private async Task Save()
     {
@@ -194,6 +205,24 @@ else if (errorMessage is not null)
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Server-side rules the annotations cannot express: stock and date range.
+        var stock = await db.Products
+            .Where(p => p.ProductId == editing.ProductId)
+            .Select(p => (int?)p.UnitsInStock)
+            .SingleOrDefaultAsync();
+        if (stock is null)
+        {
+            validationErrors = ["The selected product no longer exists."];
+            return;
+        }
+
+        validationErrors = OrderValidator.Validate(editing.Quantity, editing.OrderDate, stock.Value, DateTime.Today);
+        if (validationErrors.Count > 0)
+        {
+            return;
+        }
+
         if (editing.OrderId == 0)
         {
             db.Orders.Add(editing);
@@ -221,6 +250,7 @@ else if (errorMessage is not null)
 
         savedMessage = "Saved order.";
         errorMessage = null;
+        validationErrors = [];
         editing = null;
         await LoadAsync();
     }
@@ -259,6 +289,7 @@ else if (errorMessage is not null)
 
     private async Task ReportConflictAsync()
     {
+        validationErrors = [];
         errorMessage = "The order was changed or deleted by someone else, so it was not saved. The list has been reloaded.";
         editing = null;
         await LoadAsync();

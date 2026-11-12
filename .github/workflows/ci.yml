@@ -35,6 +35,9 @@ jobs:
       - name: Build
         run: dotnet build AccessToBlazer.slnx -c Release --no-restore
 
+      - name: Unit tests
+        run: dotnet test AccessToBlazer.slnx -c Release --no-build
+
   smoke:
     name: Smoke test (LocalDB)
     runs-on: windows-latest
