@@ -18,5 +18,9 @@ public class Product
     [Range(0, 1_000_000)]
     public int UnitsInStock { get; set; }
 
+    /// <summary>Optimistic concurrency token, so a stale edit is rejected rather than overwriting.</summary>
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
+
     public ICollection<Order> Orders { get; set; } = new List<Order>();
 }

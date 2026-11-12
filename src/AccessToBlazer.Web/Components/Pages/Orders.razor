@@ -16,6 +16,10 @@
 {
     <div class="alert alert-success py-2">@savedMessage</div>
 }
+else if (errorMessage is not null)
+{
+    <div class="alert alert-danger py-2">@errorMessage</div>
+}
 
 <div class="row">
     <div class="col-md-7">
@@ -108,6 +112,7 @@
     private List<Product> products = new();
     private Order? editing;
     private string? savedMessage;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -126,19 +131,22 @@
     private void AddNew()
     {
         savedMessage = null;
+        errorMessage = null;
         editing = new Order { OrderDate = DateTime.Today };
     }
 
     private void Edit(Order order)
     {
         savedMessage = null;
+        errorMessage = null;
         editing = new Order
         {
             OrderId = order.OrderId,
             CustomerId = order.CustomerId,
             ProductId = order.ProductId,
             Quantity = order.Quantity,
-            OrderDate = order.OrderDate
+            OrderDate = order.OrderDate,
+            RowVersion = order.RowVersion
         };
     }
 
@@ -161,20 +169,49 @@
             db.Orders.Update(editing);
         }
 
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await ReportConflictAsync();
+            return;
+        }
+        catch (DbUpdateException)
+        {
+            // Typically a customer or product deleted since the lists were loaded.
+            errorMessage = "Could not save the order. Check that the customer and product still exist.";
+            return;
+        }
+
         savedMessage = "Saved order.";
+        errorMessage = null;
         editing = null;
         await LoadAsync();
     }
 
     private async Task Delete(Order order)
     {
+        savedMessage = null;
+        errorMessage = null;
+
         await using var db = await DbFactory.CreateDbContextAsync();
         var entity = await db.Orders.FindAsync(order.OrderId);
         if (entity is not null)
         {
+            // Delete only if the row is still the version the user saw.
+            db.Entry(entity).Property(o => o.RowVersion).OriginalValue = order.RowVersion;
             db.Orders.Remove(entity);
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await ReportConflictAsync();
+                return;
+            }
         }
 
         if (editing?.OrderId == order.OrderId)
@@ -183,6 +220,13 @@
         }
 
         savedMessage = "Deleted order.";
+        await LoadAsync();
+    }
+
+    private async Task ReportConflictAsync()
+    {
+        errorMessage = "The order was changed or deleted by someone else, so it was not saved. The list has been reloaded.";
+        editing = null;
         await LoadAsync();
     }
 }

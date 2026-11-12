@@ -6,9 +6,9 @@
 --     --context SampleDbContext --output docs/schema.sql
 --
 -- This mirrors the three Access tables one-for-one:
---   Products   4 columns  + IDENTITY(1,1) on ProductID   (Access COUNTER)
---   Customers  4 columns  + IDENTITY(1,1) on CustomerID  (Access COUNTER)
---   Orders     5 columns  + 2 enforced foreign keys
+--   Products   4 columns + RowVersion + IDENTITY(1,1) on ProductID   (Access COUNTER)
+--   Customers  4 columns + RowVersion + IDENTITY(1,1) on CustomerID  (Access COUNTER)
+--   Orders     5 columns + RowVersion + 2 enforced foreign keys
 --
 -- The FKs use ON DELETE NO ACTION, which is EF's DeleteBehavior.Restrict.
 -- That is why the app refuses to delete a product or customer that an order
@@ -105,6 +105,19 @@ CREATE INDEX [IX_Orders_ProductId] ON [Orders] ([ProductId]);
 
 INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
 VALUES (N'20260929003155_InitialCreate', N'10.0.12');
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+ALTER TABLE [Products] ADD [RowVersion] rowversion NULL;
+
+ALTER TABLE [Orders] ADD [RowVersion] rowversion NULL;
+
+ALTER TABLE [Customers] ADD [RowVersion] rowversion NULL;
+
+INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+VALUES (N'20261112011756_AddRowVersion', N'10.0.12');
 
 COMMIT;
 GO

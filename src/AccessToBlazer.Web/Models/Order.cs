@@ -22,4 +22,8 @@ public class Order
     public int Quantity { get; set; }
 
     public DateTime OrderDate { get; set; }
+
+    /// <summary>Optimistic concurrency token, so a stale edit is rejected rather than overwriting.</summary>
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
 }

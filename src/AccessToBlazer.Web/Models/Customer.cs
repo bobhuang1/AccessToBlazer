@@ -18,5 +18,9 @@ public class Customer
     [StringLength(30)]
     public string? Phone { get; set; }
 
+    /// <summary>Optimistic concurrency token, so a stale edit is rejected rather than overwriting.</summary>
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
+
     public ICollection<Order> Orders { get; set; } = new List<Order>();
 }

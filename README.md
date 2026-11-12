@@ -311,7 +311,8 @@ leaves out what makes a real conversion hard:
 - No VBA, no macros, no event-driven form logic to translate.
 - No lookup/report queries beyond the two combo-box `RowSource` SELECTs, and no
   subforms.
-- No undo, no optimistic concurrency, no audit trail.
+- No undo and no audit trail. Edits use an optimistic-concurrency `RowVersion`
+  token, so a stale edit is rejected with a message instead of overwriting.
 - No deployment/IIS configuration and no load testing.
 
 A real port adds those one at a time on top of exactly this structure. The

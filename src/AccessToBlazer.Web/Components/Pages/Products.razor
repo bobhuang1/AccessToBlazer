@@ -113,7 +113,8 @@ else if (errorMessage is not null)
             ProductId = product.ProductId,
             ProductName = product.ProductName,
             UnitPrice = product.UnitPrice,
-            UnitsInStock = product.UnitsInStock
+            UnitsInStock = product.UnitsInStock,
+            RowVersion = product.RowVersion
         };
     }
 
@@ -136,7 +137,21 @@ else if (errorMessage is not null)
             db.Products.Update(editing);
         }
 
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await ReportConflictAsync($"\"{editing.ProductName}\"");
+            return;
+        }
+        catch (DbUpdateException)
+        {
+            errorMessage = $"Could not save \"{editing.ProductName}\".";
+            return;
+        }
+
         savedMessage = $"Saved \"{editing.ProductName}\".";
         errorMessage = null;
         editing = null;
@@ -163,8 +178,24 @@ else if (errorMessage is not null)
         var entity = await db.Products.FindAsync(product.ProductId);
         if (entity is not null)
         {
+            // Delete only if the row is still the version the user saw.
+            db.Entry(entity).Property(p => p.RowVersion).OriginalValue = product.RowVersion;
             db.Products.Remove(entity);
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await ReportConflictAsync($"\"{product.ProductName}\"");
+                return;
+            }
+            catch (DbUpdateException)
+            {
+                // An order was added after the check above (FK Restrict).
+                errorMessage = $"Cannot delete \"{product.ProductName}\": it is still referenced by an order.";
+                return;
+            }
         }
 
         if (editing?.ProductId == product.ProductId)
@@ -173,6 +204,13 @@ else if (errorMessage is not null)
         }
 
         savedMessage = $"Deleted \"{product.ProductName}\".";
+        await LoadAsync();
+    }
+
+    private async Task ReportConflictAsync(string what)
+    {
+        errorMessage = $"{what} was changed or deleted by someone else, so it was not saved. The list has been reloaded.";
+        editing = null;
         await LoadAsync();
     }
 }
