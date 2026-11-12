@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["AccessToBlazer.Web.styles.css"]" />
-    <ImportMap />
+    <ImportMap AdditionalAttributes="@(new Dictionary<string, object> { ["nonce"] = Nonce })" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
 </head>
@@ -17,7 +17,15 @@
 <body>
     <Routes />
     <ReconnectModal />
+    <script src="@Assets["nav-menu.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? Nonce => HttpContext?.Items[CspNonce.ItemKey] as string;
+}

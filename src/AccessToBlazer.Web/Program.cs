@@ -1,5 +1,6 @@
 using AccessToBlazer.Web.Components;
 using AccessToBlazer.Web.Data;
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -33,6 +34,34 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Migrate
 }
 
 // Configure the HTTP request pipeline.
+// Security headers on every response. Blazor Server needs same-origin scripts and
+// its websocket (covered by connect-src 'self'); style-src keeps 'unsafe-inline'
+// because Blazor and the components emit inline style attributes.
+string BuildContentSecurityPolicy(string nonce) => string.Join("; ",
+    "default-src 'self'",
+    $"script-src 'self' 'nonce-{nonce}'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'");
+app.Use(async (context, next) =>
+{
+    // The only inline script is the import map Blazor emits in App.razor; it gets this
+    // per-request nonce (an import map cannot be loaded from a file).
+    var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+    context.Items[CspNonce.ItemKey] = nonce;
+    var headers = context.Response.Headers;
+    headers.ContentSecurityPolicy = BuildContentSecurityPolicy(nonce);
+    headers.XContentTypeOptions = "nosniff";
+    headers.XFrameOptions = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    await next();
+});
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -46,6 +75,14 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode(options =>
+        // Blazor adds its own frame-ancestors CSP header (default 'self'); keep it consistent with ours.
+        options.ContentSecurityFrameAncestorsPolicy = "'none'");
 
 app.Run();
+
+/// <summary>Where the per-request CSP nonce is stored in <c>HttpContext.Items</c>.</summary>
+internal static class CspNonce
+{
+    public const string ItemKey = "csp-nonce";
+}
