@@ -74,7 +74,7 @@ else if (errorMessage is not null)
                                 <option value="0">-- select --</option>
                                 @foreach (var customer in CustomerList ?? [])
                                 {
-                                    <option value="@customer.CustomerId">@customer.CustomerName</option>
+                                    <option value="@customer.Id">@customer.Name</option>
                                 }
                             </InputSelect>
                             <ValidationMessage For="() => editing.CustomerId" />
@@ -85,7 +85,7 @@ else if (errorMessage is not null)
                                 <option value="0">-- select --</option>
                                 @foreach (var product in ProductList ?? [])
                                 {
-                                    <option value="@product.ProductId">@product.ProductName</option>
+                                    <option value="@product.Id">@product.Name</option>
                                 }
                             </InputSelect>
                             <ValidationMessage For="() => editing.ProductId" />
@@ -98,6 +98,7 @@ else if (errorMessage is not null)
                         <div class="mb-3">
                             <label class="form-label">Order date</label>
                             <InputDate class="form-control" @bind-Value="editing.OrderDate" />
+                            <ValidationMessage For="() => editing.OrderDate" />
                         </div>
                         @foreach (var message in validationErrors)
                         {
@@ -124,10 +125,10 @@ else if (errorMessage is not null)
     public int TotalCount { get; set; }
 
     [PersistentState]
-    public List<Customer>? CustomerList { get; set; }
+    public List<LookupItem>? CustomerList { get; set; }
 
     [PersistentState]
-    public List<Product>? ProductList { get; set; }
+    public List<LookupItem>? ProductList { get; set; }
 
     private Order? editing;
     private string? savedMessage;
@@ -139,8 +140,10 @@ else if (errorMessage is not null)
         if (OrderList is null || CustomerList is null || ProductList is null)
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            CustomerList = await db.Customers.AsNoTracking().OrderBy(c => c.CustomerName).ToListAsync();
-            ProductList = await db.Products.AsNoTracking().OrderBy(p => p.ProductName).ToListAsync();
+            CustomerList = await db.Customers.AsNoTracking().OrderBy(c => c.CustomerName)
+                .Select(c => new LookupItem(c.CustomerId, c.CustomerName)).ToListAsync();
+            ProductList = await db.Products.AsNoTracking().OrderBy(p => p.ProductName)
+                .Select(p => new LookupItem(p.ProductId, p.ProductName)).ToListAsync();
             await LoadAsync();
         }
     }
