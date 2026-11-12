@@ -61,6 +61,8 @@ jobs:
             RedirectStandardError  = $err
             PassThru               = $true
           }
+          # Migration and the LocalDB fallback only run in Development.
+          $env:ASPNETCORE_ENVIRONMENT = 'Development'
           $p = Start-Process @startArgs
 
           $ready = $false

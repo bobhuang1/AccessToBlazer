@@ -215,7 +215,12 @@ you can open both and see identical content.
 - The database is created, migrated and seeded automatically on first run, so
   there is no manual setup.
 - There is **no authentication**, matching the original Access app, which had
-  no login form.
+  no login form. This is a **local demo only**: anyone who can reach the app can
+  change or delete every record. It listens on `localhost` by default and
+  `AllowedHosts` is `localhost`; do not expose it to a network. Outside
+  Development the app does not migrate the database and requires
+  `ConnectionStrings:SampleDb` to be set (set `MigrateOnStartup=true` to opt
+  back in to migration on start).
 
 ## How to run
 

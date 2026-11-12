@@ -8,17 +8,25 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// The LocalDB fallback is for the local demo only; any other environment must
+// configure ConnectionStrings:SampleDb explicitly and fails fast without it.
 var connectionString = builder.Configuration.GetConnectionString("SampleDb")
-    ?? "Server=(localdb)\\MSSQLLocalDB;Database=AccessToBlazerSample;Trusted_Connection=True;MultipleActiveResultSets=true";
+    ?? (builder.Environment.IsDevelopment()
+        ? "Server=(localdb)\\MSSQLLocalDB;Database=AccessToBlazerSample;Trusted_Connection=True;MultipleActiveResultSets=true"
+        : throw new InvalidOperationException(
+            "ConnectionStrings:SampleDb is not configured. Set it, or run with ASPNETCORE_ENVIRONMENT=Development to use LocalDB."));
 builder.Services.AddDbContextFactory<SampleDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 var app = builder.Build();
 
 // Create the LocalDB database and apply migrations on startup so the sample
-// runs with no manual setup steps.
-using (var scope = app.Services.CreateScope())
+// runs with no manual setup steps. Only in Development (or when explicitly
+// enabled with MigrateOnStartup=true): the app login then needs no DDL rights
+// elsewhere and multiple instances cannot race on the migration.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("MigrateOnStartup"))
 {
+    using var scope = app.Services.CreateScope();
     var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SampleDbContext>>();
     using var db = factory.CreateDbContext();
     db.Database.Migrate();
