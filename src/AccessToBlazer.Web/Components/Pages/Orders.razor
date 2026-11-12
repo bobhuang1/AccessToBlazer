@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using AccessToBlazer.Web.Data
 @using AccessToBlazer.Web.Models
+@using AccessToBlazer.Web.Components.Shared
 @inject IDbContextFactory<SampleDbContext> DbFactory
 
 <PageTitle>Orders</PageTitle>
@@ -51,6 +52,7 @@ else if (errorMessage is not null)
                 }
             </tbody>
         </table>
+        <Pager Page="CurrentPage" TotalCount="TotalCount" PageChanged="GoToPageAsync" />
         <button class="btn btn-success" @onclick="AddNew">Add order</button>
     </div>
 
@@ -112,6 +114,12 @@ else if (errorMessage is not null)
     public List<OrderRow>? OrderList { get; set; }
 
     [PersistentState]
+    public int CurrentPage { get; set; }
+
+    [PersistentState]
+    public int TotalCount { get; set; }
+
+    [PersistentState]
     public List<Customer>? CustomerList { get; set; }
 
     [PersistentState]
@@ -136,13 +144,22 @@ else if (errorMessage is not null)
     private async Task LoadAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
+        TotalCount = await db.Orders.CountAsync();
+        CurrentPage = Paging.ClampPage(CurrentPage, TotalCount);
         OrderList = await db.Orders
             .AsNoTracking()
-            .OrderByDescending(o => o.OrderDate)
+            .OrderByDescending(o => o.OrderDate).ThenByDescending(o => o.OrderId)
+            .ForPage(CurrentPage)
             .Select(o => new OrderRow(
                 o.OrderId, o.CustomerId, o.Customer!.CustomerName, o.ProductId, o.Product!.ProductName,
                 o.Quantity, o.OrderDate, o.RowVersion))
             .ToListAsync();
+    }
+
+    private async Task GoToPageAsync(int newPage)
+    {
+        CurrentPage = newPage;
+        await LoadAsync();
     }
 
     private void AddNew()

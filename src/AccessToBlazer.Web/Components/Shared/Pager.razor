@@ -1,0 +1,20 @@
+@using AccessToBlazer.Web.Models
+
+@if (TotalCount > 0)
+{
+    var totalPages = Paging.TotalPages(TotalCount, PageSize);
+    var first = (Page - 1) * PageSize + 1;
+    var last = Math.Min(Page * PageSize, TotalCount);
+    <nav class="d-flex align-items-center gap-2 mb-3" aria-label="Pages">
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(Page <= 1)" @onclick="() => PageChanged.InvokeAsync(Page - 1)">Previous</button>
+        <span class="small text-muted">Page @Page of @totalPages (@first&ndash;@last of @TotalCount)</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(Page >= totalPages)" @onclick="() => PageChanged.InvokeAsync(Page + 1)">Next</button>
+    </nav>
+}
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public int PageSize { get; set; } = Paging.DefaultPageSize;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+}
