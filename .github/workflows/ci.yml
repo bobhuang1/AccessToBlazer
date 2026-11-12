@@ -10,17 +10,24 @@ on:
 permissions:
   contents: read
 
+# Cancel a superseded run of the same branch or pull request.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: src/AccessToBlazer.Web/AccessToBlazer.Web.csproj
 
       - name: Restore
         run: dotnet restore AccessToBlazer.slnx
@@ -32,12 +39,14 @@ jobs:
     name: Smoke test (LocalDB)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: src/AccessToBlazer.Web/AccessToBlazer.Web.csproj
 
       - name: Build
         run: dotnet build src/AccessToBlazer.Web/AccessToBlazer.Web.csproj -c Release
