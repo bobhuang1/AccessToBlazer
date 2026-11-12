@@ -31,7 +31,7 @@ else if (errorMessage is not null)
                 </tr>
             </thead>
             <tbody>
-                @foreach (var product in products)
+                @foreach (var product in ProductList ?? [])
                 {
                     <tr class="@(editing is not null && editing.ProductId == product.ProductId ? "table-primary" : null)">
                         <td>@product.ProductId</td>
@@ -84,17 +84,26 @@ else if (errorMessage is not null)
 </div>
 
 @code {
-    private List<Product> products = new();
+    // Persisted from the prerender pass so the circuit does not query again.
+    [PersistentState]
+    public List<Product>? ProductList { get; set; }
+
     private Product? editing;
     private string? savedMessage;
     private string? errorMessage;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (ProductList is null)
+        {
+            await LoadAsync();
+        }
+    }
 
     private async Task LoadAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        products = await db.Products.OrderBy(p => p.ProductName).ToListAsync();
+        ProductList = await db.Products.AsNoTracking().OrderBy(p => p.ProductName).ToListAsync();
     }
 
     private void AddNew()

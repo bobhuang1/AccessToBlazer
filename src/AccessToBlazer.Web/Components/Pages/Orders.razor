@@ -35,12 +35,12 @@ else if (errorMessage is not null)
                 </tr>
             </thead>
             <tbody>
-                @foreach (var order in orders)
+                @foreach (var order in OrderList ?? [])
                 {
                     <tr class="@(editing is not null && editing.OrderId == order.OrderId ? "table-primary" : null)">
                         <td>@order.OrderId</td>
-                        <td>@order.Customer?.CustomerName</td>
-                        <td>@order.Product?.ProductName</td>
+                        <td>@order.CustomerName</td>
+                        <td>@order.ProductName</td>
                         <td class="text-end">@order.Quantity</td>
                         <td>@order.OrderDate.ToString("yyyy-MM-dd")</td>
                         <td class="text-end">
@@ -70,7 +70,7 @@ else if (errorMessage is not null)
                             <label class="form-label">Customer</label>
                             <InputSelect class="form-select" @bind-Value="editing.CustomerId">
                                 <option value="0">-- select --</option>
-                                @foreach (var customer in customers)
+                                @foreach (var customer in CustomerList ?? [])
                                 {
                                     <option value="@customer.CustomerId">@customer.CustomerName</option>
                                 }
@@ -81,7 +81,7 @@ else if (errorMessage is not null)
                             <label class="form-label">Product</label>
                             <InputSelect class="form-select" @bind-Value="editing.ProductId">
                                 <option value="0">-- select --</option>
-                                @foreach (var product in products)
+                                @foreach (var product in ProductList ?? [])
                                 {
                                     <option value="@product.ProductId">@product.ProductName</option>
                                 }
@@ -107,25 +107,42 @@ else if (errorMessage is not null)
 </div>
 
 @code {
-    private List<Order> orders = new();
-    private List<Customer> customers = new();
-    private List<Product> products = new();
+    // Persisted from the prerender pass so the circuit does not query again.
+    [PersistentState]
+    public List<OrderRow>? OrderList { get; set; }
+
+    [PersistentState]
+    public List<Customer>? CustomerList { get; set; }
+
+    [PersistentState]
+    public List<Product>? ProductList { get; set; }
+
     private Order? editing;
     private string? savedMessage;
     private string? errorMessage;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (OrderList is null || CustomerList is null || ProductList is null)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            CustomerList = await db.Customers.AsNoTracking().OrderBy(c => c.CustomerName).ToListAsync();
+            ProductList = await db.Products.AsNoTracking().OrderBy(p => p.ProductName).ToListAsync();
+            await LoadAsync();
+        }
+    }
 
+    // Only the orders change on save/delete; the lookup lists are loaded once.
     private async Task LoadAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        orders = await db.Orders
-            .Include(o => o.Customer)
-            .Include(o => o.Product)
+        OrderList = await db.Orders
+            .AsNoTracking()
             .OrderByDescending(o => o.OrderDate)
+            .Select(o => new OrderRow(
+                o.OrderId, o.CustomerId, o.Customer!.CustomerName, o.ProductId, o.Product!.ProductName,
+                o.Quantity, o.OrderDate, o.RowVersion))
             .ToListAsync();
-        customers = await db.Customers.OrderBy(c => c.CustomerName).ToListAsync();
-        products = await db.Products.OrderBy(p => p.ProductName).ToListAsync();
     }
 
     private void AddNew()
@@ -135,7 +152,7 @@ else if (errorMessage is not null)
         editing = new Order { OrderDate = DateTime.Today };
     }
 
-    private void Edit(Order order)
+    private void Edit(OrderRow order)
     {
         savedMessage = null;
         errorMessage = null;
@@ -191,7 +208,7 @@ else if (errorMessage is not null)
         await LoadAsync();
     }
 
-    private async Task Delete(Order order)
+    private async Task Delete(OrderRow order)
     {
         savedMessage = null;
         errorMessage = null;
